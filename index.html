@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Her MINI – Webapp</title>
+  <style>
+    :root {
+      --bg: #12010e;
+      --panel: #1f0a1a;
+      --text: #ffe8f4;
+      --muted: #f0a2c4;
+      --accent: #ff5cab;   /* pink */
+      --danger: #ff4d6d;   /* rose */
+      --grid-border: #ff9cc8; /* soft pink silhouette */
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color: var(--text);
+      background: linear-gradient(180deg, #150313, #1a0716 35%, #12010e 100%);
+    }
+    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    .topbar { display:flex; align-items:center; gap:12px; margin-bottom: 16px; }
+    .title { font-size: 20px; font-weight: 700; letter-spacing: 0.2px; }
+    .spacer { flex:1; }
+    button, .toggle { background: var(--panel); color: var(--text); border: 1px solid #23252b; padding: 8px 10px; border-radius: 12px; font-weight: 600; cursor: pointer; }
+    .toggle { display:flex; align-items:center; gap:8px; user-select:none; }
+    .toggle input { appearance: none; width: 34px; height: 20px; background:#242731; border-radius: 999px; position: relative; outline: none; border: 1px solid #2f3340; }
+    .toggle input:after { content:""; position:absolute; width: 14px; height: 14px; border-radius: 50%; background:#7a8599; top: 2px; left: 2px; transition: all .15s ease; }
+    .toggle input:checked { background:#4c1638; border-color:#7d2154; }
+    .toggle input:checked:after { background:var(--accent); left: 18px; }
+    .layout { display:grid; grid-template-columns: 520px 1fr; gap: 18px; align-items: start; }
+    .panel { background: rgba(31,10,26,.85); border:1px solid #402036; border-radius: 16px; padding: 14px; }
+
+    /* Grid */
+    .grid { width: 100%; display: grid; border-radius: 10px; overflow: clip; user-select: none; background:#1a0a15; outline: none; }
+    .cell { position: relative; display:flex; align-items:center; justify-content:center; font-weight: 700; font-size: 28px; background:#1d0c18; }
+    .cell.block { background: #0f0610; }
+    .cell .letter { transform: translateY(1px); }
+    .cell.sel { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .cell.wrong { box-shadow: inset 0 0 0 3px var(--danger); }
+
+    /* Morphing silhouette border */
+    .cell.edge-t { border-top: 2px solid var(--grid-border); }
+    .cell.edge-b { border-bottom: 2px solid var(--grid-border); }
+    .cell.edge-l { border-left: 2px solid var(--grid-border); }
+    .cell.edge-r { border-right: 2px solid var(--grid-border); }
+
+    /* Tiny clue numbers and highlights */
+    .cell .num{position:absolute;top:2px;left:3px;font-size:10px;font-weight:700;color:var(--muted);opacity:.9;pointer-events:none}
+    .cell.active{background:#ff5cab30}
+
+    .cluegroup h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+    .cluelist { display:flex; flex-direction: column; gap: 6px; max-height: 240px; overflow:auto; padding-right:6px; }
+    .clue { font-size: 13px; color:#ffd4e7; padding:6px 8px; border-radius:8px; border:1px solid #402036; background:#1a0a15; }
+    .clue.active{background:#2a0f21;border-color:var(--accent);color:var(--text)}
+
+    .controls { display:flex; flex-wrap: wrap; gap:8px; margin-top:12px; }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+    input[type="file"] { display:none; }
+    label.filebtn { display:inline-flex; align-items:center; gap:8px; background: var(--panel); border:1px solid #402036; padding: 8px 10px; border-radius: 12px; font-weight: 700; cursor:pointer; }
+
+    /* Login overlay */
+    .overlay { position: fixed; inset: 0; display:none; place-items:center; background: rgba(0,0,0,.55); backdrop-filter: blur(2px); z-index: 10; }
+    .overlay .sheet { width: min(420px, 92vw); background: #1d0c18; border:1px solid #402036; border-radius: 16px; padding: 18px; }
+    .row { display:flex; gap:10px; align-items:center; }
+    .row input { flex:1; background:#12010e; border:1px solid #402036; color:var(--text); border-radius:12px; padding:10px 12px; font-weight:700; }
+
+    /* Stats table */
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #402036; font-size: 13px; }
+    th { color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid #402036; background:#12010e }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="title" id="title">Her MINI</div>
+      <span id="who" class="pill" title="Current profile" style="display:none"></span>
+      <div class="spacer"></div>
+      <button id="statsBtn">Stats</button>
+      <button id="switchBtn">Switch User</button>
+      <div id="timer" style="font-weight:700; letter-spacing:.5px; padding:6px 10px; border:1px solid #402036; border-radius:12px; background:#1a0a15; min-width:72px; text-align:center;">00:00</div>
+      <label class="filebtn" for="file">Open JSON</label>
+      <input id="file" type="file" accept="application/json" />
+      <label class="toggle"><input id="autocheck" type="checkbox" checked><span>Autocheck</span></label>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div id="grid" class="grid" tabindex="0" aria-label="Crossword grid"></div>
+        <div class="hint">Keys: arrows move · <b>Tab</b> switches Across/Down · <b>⌫</b> delete · type letters</div>
+      </div>
+
+      <div class="panel" id="sidePanel">
+        <div class="clues" id="cluesPanel">
+          <div class="cluegroup">
+            <h3>Across</h3>
+            <div id="across" class="cluelist"></div>
+          </div>
+          <div class="cluegroup">
+            <h3>Down</h3>
+            <div id="down" class="cluelist"></div>
+          </div>
+          <div class="controls">
+            <button id="toggleDir">Toggle Dir (↔︎)</button>
+            <button id="checkSquare">Check Square</button>
+            <button id="checkWord">Check Word</button>
+            <button id="revealSquare">Reveal ☐</button>
+            <button id="revealWord">Reveal Word</button>
+            <button id="revealAll">Reveal All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login overlay -->
+  <div id="loginOverlay" class="overlay">
+    <div class="sheet">
+      <h2 style="margin:0 0 10px">Welcome</h2>
+      <p style="margin:0 0 14px; color:var(--muted)">Enter your name to save and resume your puzzles.</p>
+      <div class="row" style="margin-bottom:10px">
+        <input id="nameInput" placeholder="e.g., Mia" autocomplete="name" />
+        <button id="loginBtn">Continue</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">Data is stored locally in your browser (no server).</div>
+    </div>
+  </div>
+
+  <script>
+    // ===== Persistence Model (localStorage) =====
+    const LS_KEY = 'herMini.profiles.v1';
+    const LS_CURRENT = 'herMini.currentUser';
+
+    function loadProfiles(){
+      try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
+    }
+    function saveProfiles(p){ localStorage.setItem(LS_KEY, JSON.stringify(p)); }
+    function currentUser(){ return localStorage.getItem(LS_CURRENT) || null; }
+    function setCurrentUser(name){ if(name){ localStorage.setItem(LS_CURRENT, name); } else { localStorage.removeItem(LS_CURRENT); } }
+
+    function ensureProfile(name){
+      const p = loadProfiles();
+      if(!p[name]) p[name] = { settings:{autocheck:true}, sessions:{} };
+      saveProfiles(p);
+      return p[name];
+    }
+
+    function upsertSession(name, puzzleId, payload){
+      const all = loadProfiles();
+      const prof = all[name] || { settings:{autocheck:true}, sessions:{} };
+      const prev = prof.sessions[puzzleId] || {};
+      prof.sessions[puzzleId] = { ...prev, ...payload, updatedAt: Date.now() };
+      if(payload.autocheck !== undefined){ prof.settings.autocheck = payload.autocheck; }
+      all[name] = prof;
+      saveProfiles(all);
+    }
+
+    function getSession(name, puzzleId){
+      const all = loadProfiles();
+      return (all[name] && all[name].sessions[puzzleId]) || null;
+    }
+
+    function getAllSessions(name){
+      const all = loadProfiles();
+      const prof = all[name];
+      return prof ? prof.sessions : {};
+    }
+
+    // ===== App State =====
+    let state = {
+      title: 'Her MINI',
+      dir: 'across',
+      sel: { r:0, c:0 },
+      rows: 0, cols: 0,
+      grid: [], blocks: [], solution: [],
+      clues: { across: [], down: [] },
+      autocheck: true,
+      numbers: [],
+      acrossMap: [], downMap: [],
+      puzzleId: null,
+      solved: false,
+    };
+
+    // Timer
+    let timerStart = null;   // epoch when started (for running clock)
+    let elapsed = 0;         // seconds accumulated so far
+    let timerInterval = null;
+
+    // DOM refs
+    const gridEl   = document.getElementById('grid');
+    const acrossEl = document.getElementById('across');
+    const downEl   = document.getElementById('down');
+    const whoEl    = document.getElementById('who');
+
+    // Init autocheck from profile (if any)
+    document.getElementById('autocheck').addEventListener('change', e => {
+      state.autocheck = e.target.checked;
+      const u = currentUser();
+      if(u) upsertSession(u, state.puzzleId || '__settings__', { autocheck: state.autocheck });
+      renderGrid();
+    });
+
+    function setSize(r, c){
+      state.rows=r; state.cols=c;
+      gridEl.style.aspectRatio = `${c} / ${r}`;
+      gridEl.style.gridTemplateColumns = `repeat(${c}, 1fr)`;
+    }
+
+    // ===== File load (unsolved import) =====
+    function loadPuzzle(obj, fileNameHint){
+      if (!obj || !obj.solution) { alert('Invalid puzzle JSON'); return; }
+      const r1 = obj.solution.length;
+      const c1 = (obj.solution[0]||'').length;
+      if (!r1 || !c1) { alert('Empty solution matrix'); return; }
+      if (obj.solution.some(row => row.length !== c1)) { alert('All solution rows must be same length'); return; }
+
+      const derivedId = (obj.id) || (obj.date) || (fileNameHint ? fileNameHint.replace(/\.json$/i,'') : `puzzle-${r1}x${c1}`);
+      state.puzzleId = String(derivedId);
+
+      setSize(r1,c1);
+      state.title = obj.title || 'Her MINI';
+      document.getElementById('title').textContent = state.title;
+      state.clues = obj.clues || { across: [], down: [] };
+      state.blocks = Array.from({length:r1},(_,r)=>Array.from({length:c1},(_,c)=> obj.solution[r][c] === '#'));
+      state.solution = Array.from({length:r1},(_,r)=>Array.from({length:c1},(_,c)=> {
+        const ch = obj.solution[r][c];
+        return ch === '#' ? '#' : String(ch).toUpperCase();
+      }));
+      // Start blank, may be overridden by saved progress
+      state.grid = Array.from({length:r1},()=>Array(c1).fill(null));
+      computeNumbers();
+
+      // Select first open cell
+      outer: for (let r=0;r<r1;r++) for(let c=0;c<c1;c++) if(!state.blocks[r][c]){ state.sel={r,c}; break outer; }
+
+      restoreIfAny();
+      startTimer();
+      renderAll();
+      gridEl.focus();
+    }
+
+    function computeNumbers(){
+      const R=state.rows,C=state.cols;
+      state.numbers=Array.from({length:R},()=>Array(C).fill(null));
+      state.acrossMap=[]; state.downMap=[];
+      let n=1;
+      for(let r=0;r<R;r++){
+        for(let c=0;c<C;c++){
+          if(state.blocks[r][c]) continue;
+          const startsAcross = (c===0 || state.blocks[r][c-1]) && (c+1<C && !state.blocks[r][c+1]);
+          const startsDown   = (r===0 || state.blocks[r-1][c]) && (r+1<R && !state.blocks[r+1][c]);
+          if(startsAcross || startsDown){ state.numbers[r][c]=n; }
+          if(startsAcross){
+            const cells=[]; let cc=c; while(cc<C && !state.blocks[r][cc]){ cells.push([r,cc]); cc++; }
+            state.acrossMap.push({number:n, cells});
+          }
+          if(startsDown){
+            const cells=[]; let rr=r; while(rr<R && !state.blocks[rr][c]){ cells.push([rr,c]); rr++; }
+            state.downMap.push({number:n, cells});
+          }
+          if(startsAcross || startsDown) n++;
+        }
+      }
+    }
+
+    function currentWordIndex(){
+      const aw = activeWordCells();
+      if(aw.length===0) return null;
+      const [r0,c0]=aw[0];
+      if(state.dir==='across'){
+        for(let i=0;i<state.acrossMap.length;i++){
+          const cells=state.acrossMap[i].cells;
+          if(cells.length && cells[0][0]===r0 && cells[0][1]===c0) return {type:'across', idx:i};
+        }
+      } else {
+        for(let i=0;i<state.downMap.length;i++){
+          const cells=state.downMap[i].cells;
+          if(cells.length && cells[0][0]===r0 && cells[0][1]===c0) return {type:'down', idx:i};
+        }
+      }
+      return null;
+    }
+
+    // ===== Render =====
+    function renderAll(){ renderGrid(); renderClues(); updateWho(); }
+
+    function renderGrid(){
+      gridEl.innerHTML='';
+      const R=state.rows,C=state.cols;
+      const active=new Set(activeWordCells().map(([r,c])=> r+','+c));
+      for(let r=0;r<R;r++){
+        for(let c=0;c<C;c++){
+          const isBlock=state.blocks[r][c];
+          const div=document.createElement('div');
+          div.className='cell'+(isBlock?' block':'');
+          if(!isBlock){
+            if(r===0||state.blocks[r-1][c]) div.classList.add('edge-t');
+            if(r===R-1||state.blocks[r+1][c]) div.classList.add('edge-b');
+            if(c===0||state.blocks[r][c-1]) div.classList.add('edge-l');
+            if(c===C-1||state.blocks[r][c+1]) div.classList.add('edge-r');
+            const num=state.numbers[r][c];
+            if(num){ const n=document.createElement('div'); n.className='num'; n.textContent=String(num); div.appendChild(n); }
+            const span=document.createElement('span'); span.className='letter'; span.textContent=state.grid[r][c]||''; div.appendChild(span);
+            if(active.has(r+','+c)) div.classList.add('active');
+            if(r===state.sel.r && c===state.sel.c) div.classList.add('sel');
+            if(state.autocheck){ const e=state.grid[r][c]; const s=state.solution[r][c]; if(e && e!==s) div.classList.add('wrong'); }
+            div.addEventListener('click',()=>{ selectCell(r,c); });
+          }
+          gridEl.appendChild(div);
+        }
+      }
+    }
+
+    function renderClues(){
+      acrossEl.innerHTML='';
+      state.acrossMap.forEach((entry,i)=>{
+        const d=document.createElement('div');
+        d.className='clue';
+        d.textContent=`${entry.number}. ${state.clues.across[i]||''}`;
+        const cur=currentWordIndex();
+        if(cur?.type==='across' && cur.idx===i) d.classList.add('active');
+        acrossEl.appendChild(d);
+      });
+      downEl.innerHTML='';
+      state.downMap.forEach((entry,i)=>{
+        const d=document.createElement('div');
+        d.className='clue';
+        d.textContent=`${entry.number}. ${state.clues.down[i]||''}`;
+        const cur=currentWordIndex();
+        if(cur?.type==='down' && cur.idx===i) d.classList.add('active');
+        downEl.appendChild(d);
+      });
+    }
+
+    // ===== Interaction =====
+    function selectCell(r,c){ if(state.blocks[r][c]) return; state.sel={r,c}; renderAll(); }
+    function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi,v)); }
+    function move(dr,dc){ const r=clamp(state.sel.r+dr,0,state.rows-1); const c=clamp(state.sel.c+dc,0,state.cols-1); if(!state.blocks[r][c]) state.sel={r,c}; renderAll(); }
+    function stepForward(){ state.dir==='across'?move(0,1):move(1,0); }
+    function stepBack(){ state.dir==='across'?move(0,-1):move(-1,0); }
+
+    function typeLetter(ch){ const {r,c}=state.sel; if(state.blocks[r][c]) return; state.grid[r][c]=ch.toUpperCase(); refreshAfterInput(); stepForward(); }
+    function erase(){ const {r,c}=state.sel; if(state.blocks[r][c]) return; if(state.grid[r][c]){ state.grid[r][c]=null; } else { stepBack(); } refreshAfterInput(true); }
+
+    function activeWordCells(){
+      const {r,c}=state.sel; if(state.blocks[r][c]) return [];
+      const cells=[];
+      if(state.dir==='across'){
+        let cc=c; while(cc>0 && !state.blocks[r][cc-1]) cc--; while(cc<state.cols && !state.blocks[r][cc]){ cells.push([r,cc]); cc++; }
+      } else {
+        let rr=r; while(rr>0 && !state.blocks[rr-1][c]) rr--; while(rr<state.rows && !state.blocks[rr][c]){ cells.push([rr,c]); rr++; }
+      }
+      return cells;
+    }
+
+    // Checks & reveals
+    function checkSquare(){ flashCell(state.sel.r,state.sel.c); }
+    function checkWord(){ activeWordCells().forEach(([r,c])=>flashCell(r,c)); }
+    function revealSquare(){ const {r,c}=state.sel; if(state.blocks[r][c]) return; state.grid[r][c]=state.solution[r][c]; refreshAfterInput(); stepForward(); }
+    function revealWord(){ activeWordCells().forEach(([r,c])=> state.grid[r][c]=state.solution[r][c]); refreshAfterInput(); }
+    function revealAll(){ for(let r=0;r<state.rows;r++) for(let c=0;c<state.cols;c++) if(!state.blocks[r][c]) state.grid[r][c]=state.solution[r][c]; refreshAfterInput(); }
+
+    function flashCell(r,c){ const idx=r*state.cols+c; const el=gridEl.children[idx]; if(!el||el.classList.contains('block')) return; el.animate([{boxShadow:'inset 0 0 0 0px var(--accent)'},{boxShadow:'inset 0 0 0 3px var(--accent)'},{boxShadow:'inset 0 0 0 0px var(--accent)'}],{duration:400,easing:'ease-out'}); }
+
+    // ===== Save / Restore =====
+    function gridProgress(){
+      let filled=0,total=0;
+      for(let r=0;r<state.rows;r++) for(let c=0;c<state.cols;c++) if(!state.blocks[r][c]){ total++; if(state.grid[r][c]) filled++; }
+      return { filled, total, pct: total? Math.round(100*filled/total) : 0 };
+    }
+
+    function encodeGrid(){ return state.grid.map(row=>row.map(x=>x||'.').join('')).join('\n'); }
+    function decodeGrid(s){ const rows=s.split(/\n/); for(let r=0;r<state.rows;r++) for(let c=0;c<state.cols;c++){ const ch=(rows[r]||'')[c]; state.grid[r][c] = (!ch||ch==='.'||ch==='#')? null : ch.toUpperCase(); } }
+
+    function saveNow(){
+      const u = currentUser(); if(!u || !state.puzzleId) return;
+      const gp = gridProgress();
+      upsertSession(u, state.puzzleId, {
+        title: state.title,
+        grid: encodeGrid(),
+        rows: state.rows, cols: state.cols,
+        elapsed, solved: state.solved,
+        percent: gp.pct,
+        autocheck: state.autocheck,
+      });
+    }
+
+    function restoreIfAny(){
+      const u = currentUser(); if(!u || !state.puzzleId) return;
+      const s = getSession(u, state.puzzleId);
+      const all = loadProfiles();
+      const settings = all[u]?.settings; if(settings){ state.autocheck = !!settings.autocheck; document.getElementById('autocheck').checked = state.autocheck; }
+      if(!s) { elapsed = 0; state.solved=false; return; }
+      // size must match
+      if(s.rows===state.rows && s.cols===state.cols && s.grid){ decodeGrid(s.grid); }
+      elapsed = Number(s.elapsed||0);
+      state.solved = !!s.solved;
+      if(state.solved) stopTimer();
+    }
+
+    // ===== Timer utils =====
+    function startTimer(){ if(state.solved) return; timerStart=Date.now(); updateTimer(); if(timerInterval) clearInterval(timerInterval); timerInterval=setInterval(updateTimer,1000); }
+    function stopTimer(){ if(timerInterval){ clearInterval(timerInterval); timerInterval=null; } updateTimer(); }
+    function updateTimer(){ const el=document.getElementById('timer'); if(timerStart && !state.solved){ const now=Date.now(); const secs=Math.floor((now-timerStart)/1000); el.textContent = fmtMinSec(elapsed+secs); } else { el.textContent = fmtMinSec(elapsed); } }
+    function fmtMinSec(total){ total=Math.max(0, Math.floor(total)); const m=String(Math.floor(total/60)).padStart(2,'0'); const s=String(total%60).padStart(2,'0'); return `${m}:${s}`; }
+
+    function markSolved(){ state.solved=true; // freeze time
+      if(timerStart){ elapsed += Math.floor((Date.now()-timerStart)/1000); timerStart=null; }
+      stopTimer(); gridEl.animate([{filter:'brightness(1.0)'},{filter:'brightness(1.3)'},{filter:'brightness(1.0)'}],{duration:600,easing:'ease-out'}); saveNow(); }
+
+    function isSolved(){ for(let r=0;r<state.rows;r++) for(let c=0;c<state.cols;c++) if(!state.blocks[r][c] && (state.grid[r][c]||'')!==state.solution[r][c]) return false; return true; }
+
+    function refreshAfterInput(skipStep){
+      renderAll();
+      if(isSolved() && !state.solved){ markSolved(); }
+      // If timer is running, refresh elapsed snapshot on each key
+      if(timerStart){ /* no-op */ } else { /* solved */ }
+      saveNow();
+    }
+
+    // ===== Keyboard =====
+    gridEl.addEventListener('keydown', (e)=>{
+      if(e.key==='ArrowLeft'){ e.preventDefault(); move(0,-1); return; }
+      if(e.key==='ArrowRight'){ e.preventDefault(); move(0,1); return; }
+      if(e.key==='ArrowUp'){ e.preventDefault(); move(-1,0); return; }
+      if(e.key==='ArrowDown'){ e.preventDefault(); move(1,0); return; }
+      if(e.key==='Backspace' || e.key==='Delete'){ e.preventDefault(); erase(); return; }
+      if(e.key==='Tab'){ e.preventDefault(); state.dir=(state.dir==='across'?'down':'across'); renderAll(); return; }
+      if(/^[a-zA-Z]$/.test(e.key)){ e.preventDefault(); typeLetter(e.key); return; }
+    });
+
+    // ===== Controls =====
+    document.getElementById('toggleDir').addEventListener('click',()=>{ state.dir=(state.dir==='across'?'down':'across'); renderAll(); });
+    document.getElementById('checkSquare').addEventListener('click',checkSquare);
+    document.getElementById('checkWord').addEventListener('click',checkWord);
+    document.getElementById('revealSquare').addEventListener('click',revealSquare);
+    document.getElementById('revealWord').addEventListener('click',revealWord);
+    document.getElementById('revealAll').addEventListener('click',revealAll);
+
+    // File open (unsolved)
+    document.getElementById('file').addEventListener('change', async (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      try {
+        const text = await file.text();
+        const obj = JSON.parse(text);
+        loadPuzzle(obj, file.name);
+      } catch (err) { alert('Bad JSON'); console.error(err); }
+      e.target.value = '';
+    });
+
+    // Persist on page close
+    window.addEventListener('beforeunload', () => {
+      if(timerStart){ elapsed += Math.floor((Date.now()-timerStart)/1000); timerStart = Date.now(); }
+      saveNow();
+    });
+
+    // ===== Login & profile =====
+    const overlay = document.getElementById('loginOverlay');
+    const nameInput = document.getElementById('nameInput');
+    document.getElementById('loginBtn').addEventListener('click', ()=> doLogin());
+    nameInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
+    document.getElementById('switchBtn').addEventListener('click', ()=> showLogin(true));
+
+    function showLogin(clear=false){
+      if(clear) setCurrentUser(null);
+      overlay.style.display='grid';
+      setTimeout(()=> nameInput.focus(), 0);
+    }
+
+    function hideLogin(){ overlay.style.display='none'; }
+
+    function doLogin(){
+      const name = (nameInput.value||'').trim();
+      if(!name) { nameInput.focus(); return; }
+      ensureProfile(name);
+      setCurrentUser(name);
+      hideLogin();
+      updateWho();
+      // Load settings
+      const all = loadProfiles();
+      const s = all[name]?.settings; if(s){ state.autocheck=!!s.autocheck; document.getElementById('autocheck').checked = state.autocheck; }
+      saveNow();
+    }
+
+    function updateWho(){ const u=currentUser(); if(u){ whoEl.textContent = u; whoEl.style.display='inline-block'; } else { whoEl.style.display='none'; } }
+
+    // If first visit, ask for name
+    if(!currentUser()) showLogin(false); else updateWho();
+
+    // ===== Stats =====
+    const statsBtn = document.getElementById('statsBtn');
+    statsBtn.addEventListener('click', renderStatsPanel);
+
+    function renderStatsPanel(){
+      const u = currentUser(); if(!u) { showLogin(false); return; }
+      const sessions = Object.entries(getAllSessions(u))
+        .filter(([pid])=> pid !== '__settings__')
+        .map(([pid, s])=> ({ id: pid, ...s }))
+        .sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
+
+      const panel = document.getElementById('sidePanel');
+      panel.innerHTML = '';
+      const card = document.createElement('div'); card.className='clues';
+      const h = document.createElement('h3'); h.textContent = 'Stats'; h.style.marginTop='0'; h.style.textTransform='uppercase'; h.style.letterSpacing='.12em'; h.style.color='var(--muted)';
+      card.appendChild(h);
+
+      const meta = document.createElement('div');
+      const totalSolved = sessions.filter(s=>s.solved).length;
+      const total = sessions.length;
+      meta.innerHTML = `<div class="pill" style="margin-bottom:10px">${totalSolved}/${total} solved</div>`;
+      card.appendChild(meta);
+
+      const tbl = document.createElement('table');
+      const thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th>Puzzle</th><th>Title</th><th>Time</th><th>Progress</th><th>Updated</th></tr>';
+      tbl.appendChild(thead);
+      const tb = document.createElement('tbody');
+
+      for(const s of sessions){
+        const tr = document.createElement('tr');
+        const when = s.id;
+        const title = s.title || '';
+        const time = fmtMinSec(Number(s.elapsed||0));
+        const progress = s.solved? 'Solved' : ( (s.percent??0)+"%" );
+        const upd = s.updatedAt ? new Date(s.updatedAt).toLocaleString() : '';
+        tr.innerHTML = `<td>${when}</td><td>${escapeHtml(title)}</td><td>${time}</td><td>${progress}</td><td>${upd}</td>`;
+        tr.style.cursor='pointer';
+        tr.addEventListener('click', ()=>{
+          // Attempt to restore this session into current puzzle if matches loaded one
+          const sess = getSession(u, s.id);
+          if(!sess){ return; }
+          if(state.rows===sess.rows && state.cols===sess.cols){
+            state.puzzleId = s.id; // switch focus
+            decodeGrid(sess.grid||'');
+            elapsed = Number(sess.elapsed||0);
+            state.solved = !!sess.solved;
+            if(!state.solved){ timerStart = Date.now(); if(timerInterval) clearInterval(timerInterval); timerInterval=setInterval(updateTimer,1000); }
+            else { stopTimer(); }
+            renderAll(); updateTimer();
+          } else {
+            alert('Open the matching JSON puzzle first, then click row again to restore.');
+          }
+        });
+        tb.appendChild(tr);
+      }
+      tbl.appendChild(tb);
+
+      const back = document.createElement('div');
+      back.className='controls';
+      const btn = document.createElement('button'); btn.textContent='Back to Clues'; btn.addEventListener('click', ()=> location.reload());
+      back.appendChild(btn);
+
+      card.appendChild(tbl);
+      card.appendChild(back);
+      panel.appendChild(card);
+    }
+
+    function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
+  </script>
+</body>
+</html>
