@@ -67,7 +67,7 @@
     #loginBox input { padding:8px 10px; border-radius:8px; border:1px solid #402036; background:#1a0a15; color:var(--text); }
   .greet{font-weight:700; color:var(--muted); padding:6px 10px; border:1px solid #402036; border-radius:12px; background:#1a0a15}
     /* Login modal */
-    .modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.45); backdrop-filter: blur(2px); z-index:9999; pointer-events:auto}
+    .modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.4); backdrop-filter: blur(2px); z-index:50}
     .modal.show{display:flex}
     .card{width:min(420px,92vw); background:#1f0a1a; border:1px solid #402036; border-radius:16px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,.35)}
     .card h2{margin:0 0 8px; font-size:18px; color:#ffd4e7}
@@ -90,45 +90,124 @@
     <div class="topbar">
       <div class="title" id="title">Her MINI</div>
       <div class="spacer"></div>
-      <button id="loginBtn" title="Open login" style="background:#2a0f21;border:1px solid #402036;padding:6px 10px;border-radius:12px;font-weight:700;cursor:pointer">Login</button>
-      <button id="switchUser" title="Switch user" style="background:#2a0f21;border:1px solid #402036;padding:6px 10px;border-radius:12px;font-weight:700;cursor:pointer">Switch</button>
       <span id="greet" class="greet" aria-live="polite"></span>
-      <div id="timer" ${n}` : ''; }
-    function showLogin(){ if(loginModal){ loginModal.classList.add('show'); document.body.style.overflow='hidden'; setTimeout(()=> nameInput && nameInput.focus(), 0); } } }
-    function hideLogin(){ if(loginModal){ loginModal.classList.remove('show'); document.body.style.overflow=''; } } }
+      <div id="timer" style="font-weight:700; letter-spacing:.5px; padding:6px 10px; border:1px solid #402036; border-radius:12px; background:#1a0a15; min-width:72px; text-align:center;">00:00</div>
+      <label class="filebtn" for="file">Open JSON</label>
+      <input id="file" type="file" accept="application/json" />
+      <label class="toggle"><input id="autocheck" type="checkbox" checked><span>Autocheck</span></label>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div id="grid" class="grid" tabindex="0" aria-label="Crossword grid"></div>
+        <div class="hint">Keys: arrows move · <b>Tab</b> switches Across/Down · <b>⌫</b> delete · type letters</div>
+      </div>
+
+      <div class="panel">
+        <div class="clues">
+          <div class="cluegroup">
+            <h3>Across</h3>
+            <div id="across" class="cluelist"></div>
+          </div>
+          <div class="cluegroup">
+            <h3>Down</h3>
+            <div id="down" class="cluelist"></div>
+          </div>
+          <div class="controls">
+            <button id="toggleDir">Toggle Dir (↔︎)</button>
+            <button id="checkSquare">Check Square</button>
+            <button id="checkWord">Check Word</button>
+            <button id="revealSquare">Reveal ☐</button>
+            <button id="revealWord">Reveal Word</button>
+            <button id="revealAll">Reveal All</button>
+          </div>
+        </div>
+  </div>
+
+  <!-- Login Modal -->
+  <div id="loginModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+    <div class="card">
+      <h2 id="loginTitle">Welcome to Her MINI</h2>
+      <p>Enter your name to personalize your puzzles.</p>
+      <div class="row">
+        <input id="nameInput" type="text" placeholder="Your name" maxlength="24" />
+        <button id="startBtn" type="button">Start</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ----- Login -----
+    const STORAGE_KEY = 'hermini-user';
+    const overlay = document.getElementById('loginOverlay');
+    const appWrap = document.getElementById('appWrap');
+    const input = document.getElementById('usernameInput');
+    const loginBtn = document.getElementById('loginBtn');
+    const greetEl = document.getElementById('greet');
+
+    function normalizeName(n){ return n.trim().toLowerCase(); }
+    function prettyName(n){ return n.charAt(0).toUpperCase() + n.slice(1).toLowerCase(); }
+
+    function showApp(name){
+      overlay.style.display='none';
+      appWrap.style.display='block';
+      if(greetEl) greetEl.textContent = `Hi, ${prettyName(name)}!`;
+    }
+
+    function handleLogin(){
+      const raw = input.value;
+      const norm = normalizeName(raw);
+      if(!norm){ alert('Enter a name'); return; }
+      localStorage.setItem(STORAGE_KEY, norm);
+      showApp(norm);
+    }
+
+    loginBtn.addEventListener('click', handleLogin);
+    input.addEventListener('keydown', e => { if(e.key === 'Enter') handleLogin(); });
+
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if(saved){ showApp(saved); }
+
+    // ----- State -----
+    let state = {
+      title: 'Her MINI',
+      dir: 'across',
+      sel: { r:0, c:0 },
+      rows: 0,
+      cols: 0,
+      grid: [],
+      blocks: [],
+      solution: [],
+      clues: { across: [], down: [] },
+      autocheck: true,
+      numbers: [],
+      acrossMap: [],
+      downMap: []
+    };
+
+    let timerStart = null; let timerInterval = null; let solved = false;
+
+    const gridEl = document.getElementById('grid');
+    const greetEl = document.getElementById('greet');
+    const loginModal = document.getElementById('loginModal');
+    const nameInput = document.getElementById('nameInput');
+    const startBtn = document.getElementById('startBtn');
+    
+    const acrossEl = document.getElementById('across');
+    const downEl = document.getElementById('down');
+
+    document.getElementById('autocheck').addEventListener('change', e => { state.autocheck = e.target.checked; renderGrid(); });
+
+    // ----- Profile (lightweight login) -----
+    const PROFILE_KEY = 'hermini-profile-name';
+    function getProfileName(){ return localStorage.getItem(PROFILE_KEY); }
+    function setProfileName(name){ if(name && name.trim()){ localStorage.setItem(PROFILE_KEY, name.trim()); updateGreeting(); hideLogin(); } }
+    function updateGreeting(){ const n = getProfileName(); if(greetEl) greetEl.textContent = n ? `Hi, ${n}` : ''; }
+    function showLogin(){ if(loginModal){ loginModal.classList.add('show'); setTimeout(()=> nameInput && nameInput.focus(), 0); } }
+    function hideLogin(){ if(loginModal){ loginModal.classList.remove('show'); } }
     if(startBtn){ startBtn.addEventListener('click', ()=> setProfileName(nameInput.value)); }
     if(nameInput){ nameInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') setProfileName(nameInput.value); }); }
-    const loginBtn = document.getElementById('loginBtn');
-    if(loginBtn){ loginBtn.addEventListener('click', ()=>{ showLogin(); }); }
-    if(nameInput){ nameInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') setProfileName(nameInput.value); }); }
-    ((function initProfile(){
-      try{ updateGreeting(); }catch(_){ }
-      const have = getProfileName();
-      if(!have){ showLogin(); } else { hideLogin(); }
-      // Redundant safety triggers (covers any late CSS/DOM timing quirks)
-      setTimeout(()=>{ if(!getProfileName()) showLogin(); }, 200);
-      window.addEventListener('load', ()=>{ if(!getProfileName()) showLogin(); });
-    })();
-
-    // Switch user button
-    const switchBtn = document.getElementById('switchUser');
-    if(switchBtn){
-      switchBtn.addEventListener('click', ()=>{
-        localStorage.removeItem(PROFILE_KEY);
-        updateGreeting();
-        showLogin();
-      });
-    }
-
-    // Switch user button
-    const switchBtn = document.getElementById('switchUser');
-    if(switchBtn){
-      switchBtn.addEventListener('click', ()=>{
-        localStorage.removeItem(PROFILE_KEY);
-        updateGreeting();
-        showLogin();
-      });
-    }
+    (function initProfile(){ updateGreeting(); if(!getProfileName()) showLogin(); })();
 
     function setSize(r, c){ state.rows=r; state.cols=c; gridEl.style.aspectRatio = `${c}/${r}`; gridEl.style.gridTemplateColumns = `repeat(${c}, 1fr)`; }
 
