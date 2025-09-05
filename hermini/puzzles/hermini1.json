@@ -1,0 +1,39 @@
+{
+  "title": "Her MINI – Example Import",
+  "grid": [
+    "     ",
+    "     ",
+    "     ",
+    "     ",
+    "     ",
+    "     "
+  ],
+  "solution": [
+    "##PJS",
+    "#GLUT",
+    "SEALE",
+    "ITSIN",
+    "ROMEO",
+    "#NAT#"
+  ],
+  "clues": {
+    "across": [
+      "1. Slumber party attire, casually",
+      "4. Surplus",
+      "5. Bobby ___, co-founder of the Black Panthers",
+      "6. Soccer announcer’s cry after a goal",
+      "7. Famous star-crossed lover",
+      "8. D.C. baseball player"
+    ],
+    "down": [
+      "1. Slumber party attire, casually",
+      "2. —",
+      "3. Recorder in a courtroom",
+      "4. Surplus",
+      "5. \"___, yes, ___!\"",
+      "6. Soccer announcer’s cry after a goal",
+      "7. Famous star-crossed lover",
+      "8. \"Hop aboard!\""
+    ]
+  }
+}
